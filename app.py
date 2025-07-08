@@ -10,10 +10,10 @@ st.markdown("Sube un archivo .CSV con una columna llamada **Nombre**. El sistema
 
 @st.cache_data
 def cargar_diccionario():
-    file_id = "1lRgjBBj9GN-Et3y0aOPBULGl3wBuqAfw"
-    url = f"https://drive.google.com/uc?id={file_id}"
-    df = pd.read_csv(url)
+    df = pd.read_csv("latam_forenames.csv", encoding="utf-8")
     df = df.drop_duplicates(subset="forename")
+    df["forename"] = df["forename"].astype(str).str.strip().str.lower()
+    df["gender"] = df["gender"].astype(str).str.strip()
     return df[["forename", "gender"]]
 
 diccionario = cargar_diccionario()
@@ -26,19 +26,18 @@ if archivo:
         df.columns = df.columns.str.strip().str.lower()
 
         if "nombre" not in df.columns:
-            st.error("El archivo debe tener una columna llamada 'Nombre'")
+            st.error("❌ El archivo debe tener una columna llamada 'Nombre'")
             st.stop()
 
-        # Limpiar nombre y cruzar con diccionario
-        df["nombre_limpio"] = df["nombre"].str.lower().str.strip()
+        df["nombre_limpio"] = df["nombre"].astype(str).str.lower().str.strip()
         df["nombre_limpio"] = df["nombre_limpio"].str.replace(r"[^a-záéíóúüñ ]", "", regex=True)
+
         df_genero = df.merge(diccionario, how="left", left_on="nombre_limpio", right_on="forename")
         df_genero["gender"] = df_genero["gender"].fillna("No identificado")
 
         st.success("✅ Resultado del análisis")
         st.dataframe(df_genero[["nombre", "gender"]])
 
-        # Gráfico de resumen
         genero_counts = df_genero["gender"].value_counts()
         fig, ax = plt.subplots()
         genero_counts.plot(kind='bar', ax=ax, color='mediumslateblue')
@@ -47,9 +46,8 @@ if archivo:
         ax.set_ylabel("Cantidad")
         st.pyplot(fig)
 
-        # Botón de descarga
         csv_final = df_genero[["nombre", "gender"]].to_csv(index=False)
         st.download_button("📥 Descargar resultados", csv_final, file_name="genero_detectado.csv", mime="text/csv")
 
     except Exception as e:
-        st.error(f"Error al leer el archivo: {e}")
+        st.error(f"Error al procesar el archivo: {e}")
