@@ -4,39 +4,27 @@ import re
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# 🎨 Estilos personalizados
+# Configuración general
 st.set_page_config(page_title="Género Match", layout="centered")
 
-page_bg_color = """
-<style>
-body {
-    background-color: #fdcf2d;
-}
-[data-testid="stHeader"] {
-    background: none;
-}
-[data-testid="stAppViewContainer"] {
-    background-color: #fdcf2d;
-}
-</style>
-"""
-st.markdown(page_bg_color, unsafe_allow_html=True)
-
-# 🖼️ Logo
-try:
-    logo = Image.open("logo.jpg")
+# Logo centrado
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    logo = Image.open("logo.jpg")  # Asegúrate de tener logo.jpg en el directorio
     st.image(logo, width=250)
-except:
-    st.title("👤 Género Match")
 
-# ✍️ Descripción
+# Título e instrucciones
+st.markdown("### Clasificador de Género por Nombre")
+
 st.markdown("""
-### Clasificador de Género por Nombre  
-Sube un archivo `.CSV` con una columna llamada **Nombre**.  
-El sistema asignará un género usando un diccionario confiable de nombres en español.
+Sube un archivo `.CSV` con las siguientes condiciones:
+
+- Debe tener las columnas **email** y **nombre** (ambas en minúscula).
+- Solo es válido para nombres comunes en Latinoamérica.
+- El resultado descargable incluirá: **nombre**, **email** y **género** detectado.
 """)
 
-# 📥 Cargar diccionario
+# Cargar diccionario
 @st.cache_data
 def cargar_diccionario():
     df = pd.read_csv("latam_forenames.csv")
@@ -47,29 +35,29 @@ def cargar_diccionario():
 
 diccionario = cargar_diccionario()
 
-# 📂 Subida de archivo
+# Subida del archivo
 archivo = st.file_uploader("📂 Sube tu archivo CSV", type=["csv"])
 
-# ⚙️ Procesamiento
+# Procesamiento
 if archivo:
     try:
         df = pd.read_csv(archivo, encoding="utf-8", sep=";", on_bad_lines="skip")
         df.columns = df.columns.str.strip().str.lower()
 
-        if "nombre" not in df.columns:
-            st.error("⚠️ El archivo debe tener una columna llamada 'Nombre'")
+        if not {"email", "nombre"}.issubset(df.columns):
+            st.error("El archivo debe contener las columnas 'email' y 'nombre'")
             st.stop()
 
         df["nombre_limpio"] = df["nombre"].str.lower().str.strip()
         df["nombre_limpio"] = df["nombre_limpio"].str.replace(r"[^a-záéíóúüñ ]", "", regex=True)
+
         df_genero = df.merge(diccionario, how="left", left_on="nombre_limpio", right_on="forename")
         df_genero["gender"] = df_genero["gender"].fillna("No identificado")
 
-        # ✅ Resultados
         st.success("✅ Resultado del análisis")
-        st.dataframe(df_genero[["nombre", "gender"]])
+        st.dataframe(df_genero[["nombre", "email", "gender"]])
 
-        # 📊 Gráfico
+        # Gráfico
         genero_counts = df_genero["gender"].value_counts()
         fig, ax = plt.subplots()
         genero_counts.plot(kind='bar', ax=ax, color='mediumslateblue')
@@ -78,9 +66,18 @@ if archivo:
         ax.set_ylabel("Cantidad")
         st.pyplot(fig)
 
-        # 📤 Botón descarga
-        csv_final = df_genero[["nombre", "gender"]].to_csv(index=False)
+        # Descarga
+        csv_final = df_genero[["nombre", "email", "gender"]].to_csv(index=False)
         st.download_button("📥 Descargar resultados", csv_final, file_name="genero_detectado.csv", mime="text/csv")
 
     except Exception as e:
         st.error(f"❌ Error al leer el archivo: {e}")
+
+# Footer con créditos
+st.markdown("---")
+st.markdown("""
+<p style='text-align: center; font-size: 0.9em; color: grey;'>
+Copyright © 2025 - Andrés Restrepo · 
+<a href='https://www.linkedin.com/in/andresrestrepoh/' target='_blank'>LinkedIn</a>
+</p>
+""", unsafe_allow_html=True)
