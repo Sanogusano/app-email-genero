@@ -1,14 +1,13 @@
-
 import streamlit as st
 import pandas as pd
 import re
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# Configuración general
+# Configuración de la app
 st.set_page_config(page_title="Clasificador de Género por Nombre", layout="centered", page_icon="👤")
 
-# Logo e instrucciones
+# Logo y título
 logo = Image.open("logo.jpg")
 st.image(logo, width=250)
 st.title("👤 Clasificador de Género por Nombre")
@@ -21,7 +20,6 @@ La app detectará el género a partir del nombre, o intentará extraerlo del cor
 📥 El archivo de salida incluirá: **email**, **nombre_detectado**, **fuente_nombre**, **género**.
 
 ---
-
 🛡️ Copyright 2025 - Andrés Restrepo  
 🔗 [linkedin.com/in/andresrestrepoh](https://www.linkedin.com/in/andresrestrepoh)
 """)
@@ -36,18 +34,15 @@ def cargar_diccionario():
     return df[["forename", "gender"]]
 
 diccionario = cargar_diccionario()
-nombres_validos = diccionario["forename"].tolist()
+nombres_validos = set(diccionario["forename"].tolist())
 
-# Extraer nombre desde el email si es necesario
-def extraer_nombre_desde_email(email, nombres_validos):
-    try:
-        email_user = str(email).split("@")[0].lower()
-        tokens = re.split(r"[._\-\d]", email_user)
-        for token in tokens:
-            if token in nombres_validos:
-                return token
-    except:
-        pass
+# Función para extraer nombre desde email
+def extraer_nombre_desde_email(email):
+    user = str(email).split("@")[0].lower()
+    partes = re.split(r"[._\-0-9]", user)
+    for parte in partes:
+        if parte in nombres_validos:
+            return parte
     return "No detectado"
 
 # Subida de archivo
@@ -57,6 +52,8 @@ if archivo:
     try:
         df = pd.read_csv(archivo, encoding="utf-8", sep=";", on_bad_lines="skip")
         df.columns = df.columns.str.strip().str.lower()
+        df = df.dropna(subset=["email"])  # Eliminar filas sin email
+        df = df.drop_duplicates(subset=["email"])  # Eliminar duplicados
 
         if "email" not in df.columns:
             st.error("❌ El archivo debe tener una columna llamada 'email'")
@@ -66,7 +63,7 @@ if archivo:
         df["nombre_original"] = df["nombre_original"].fillna("").astype(str).str.strip().str.lower()
 
         df["nombre_detectado"] = df.apply(
-            lambda row: row["nombre_original"] if row["nombre_original"] != "" else extraer_nombre_desde_email(row["email"], nombres_validos),
+            lambda row: row["nombre_original"] if row["nombre_original"] != "" else extraer_nombre_desde_email(row["email"]),
             axis=1
         )
 
@@ -80,12 +77,11 @@ if archivo:
         df_final = df.merge(diccionario, how="left", left_on="nombre_detectado", right_on="forename")
         df_final["gender"] = df_final["gender"].fillna("No identificado")
 
-        # Eliminar duplicados
-        df_final = df_final.drop_duplicates(subset=["email", "nombre_detectado", "fuente_nombre", "gender"])
-
+        # Resultado
         st.success("✅ Resultado del análisis")
         st.dataframe(df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]])
 
+        # Gráfico
         genero_counts = df_final["gender"].value_counts()
         fig, ax = plt.subplots()
         genero_counts.plot(kind='bar', ax=ax, color='mediumslateblue')
@@ -94,6 +90,7 @@ if archivo:
         ax.set_ylabel("Cantidad")
         st.pyplot(fig)
 
+        # Descarga
         csv_final = df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]].to_csv(index=False)
         st.download_button("📥 Descargar resultados", csv_final, file_name="genero_detectado.csv", mime="text/csv")
 
