@@ -39,6 +39,8 @@ nombres_validos = diccionario["forename"].tolist()
 
 # Función para detectar nombre dentro del correo
 def extraer_nombre_desde_email(email, nombres_validos):
+    if pd.isna(email):
+        return "Nombre no detectado"
     email_user = str(email).split("@")[0].lower()
     for nombre in nombres_validos:
         if nombre in email_user:
@@ -57,6 +59,7 @@ if archivo:
             st.error("❌ El archivo debe tener una columna llamada 'email'")
             st.stop()
 
+        df["email"] = df["email"].fillna("").astype(str).str.strip().str.lower()
         df["nombre_original"] = df["nombre"] if "nombre" in df.columns else ""
         df["nombre_original"] = df["nombre_original"].fillna("").astype(str).str.strip().str.lower()
 
