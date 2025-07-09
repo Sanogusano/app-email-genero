@@ -42,7 +42,6 @@ nombres_validos = set(diccionario["forename"].tolist())
 def extraer_nombre_desde_email(email, nombres_validos):
     try:
         user = str(email).split("@")[0].lower()
-        # Eliminar números y caracteres especiales, tokenizar
         tokens = re.split(r"[.\-_0-9]+", user)
         for token in tokens:
             if token in nombres_validos:
@@ -63,11 +62,10 @@ if archivo:
             st.error("❌ El archivo debe tener una columna llamada 'email'")
             st.stop()
 
-        # Nombre original si está
         df["nombre_original"] = df["nombre"] if "nombre" in df.columns else ""
         df["nombre_original"] = df["nombre_original"].fillna("").astype(str).str.strip().str.lower()
 
-        # Solo extraer si nombre está vacío
+        # Extraer nombre si está vacío
         df["nombre_detectado"] = df.apply(
             lambda row: row["nombre_original"] if row["nombre_original"] else extraer_nombre_desde_email(row["email"], nombres_validos),
             axis=1
@@ -96,5 +94,9 @@ if archivo:
         ax.set_ylabel("Cantidad")
         st.pyplot(fig)
 
-        # Descarga
+        # Botón de descarga
         csv_final = df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]].to_csv(index=False)
+        st.download_button("📥 Descargar resultados", csv_final, file_name="genero_detectado.csv", mime="text/csv")
+
+    except Exception as e:
+        st.error(f"Error al procesar el archivo: {e}")
