@@ -11,11 +11,11 @@ st.set_page_config(page_title="Clasificador de Género por Nombre", layout="cent
 logo = Image.open("logo.jpg")
 st.image(logo, width=250)
 
-# Título e instrucciones
+# Instrucciones
 st.title("👤 Clasificador de Género por Nombre")
 st.markdown("""
 Sube un archivo .CSV con las columnas **email** y opcionalmente **nombre**.  
-La app detectará el género a partir del nombre, o intentará extraerlo del correo si no está disponible.
+La app detectará el género a partir del nombre, o intentará extraerlo del correo **solo si el campo nombre está vacío**.
 
 ✅ Solo válido para nombres en Latam.  
 📥 El archivo de salida incluirá: **email**, **nombre_detectado**, **fuente_nombre**, **género**.
@@ -25,7 +25,7 @@ La app detectará el género a partir del nombre, o intentará extraerlo del cor
 🔗 [linkedin.com/in/andresrestrepoh](https://www.linkedin.com/in/andresrestrepoh)
 """)
 
-# Cargar diccionario
+# Diccionario de nombres
 @st.cache_data
 def cargar_diccionario():
     df = pd.read_csv("latam_forenames.csv")
@@ -37,7 +37,7 @@ def cargar_diccionario():
 diccionario = cargar_diccionario()
 nombres_validos = diccionario["forename"].tolist()
 
-# Función para extraer nombre del email
+# Función para detectar nombre en email si nombre está vacío
 def extraer_nombre_desde_email(email, nombres_validos):
     if pd.isna(email):
         return "Nombre no detectado"
@@ -50,12 +50,12 @@ def extraer_nombre_desde_email(email, nombres_validos):
     except Exception:
         return "Nombre no detectado"
 
-# Cargar archivo
+# Subida del archivo
 archivo = st.file_uploader("📂 Sube tu archivo CSV", type=["csv"])
 
 if archivo:
     try:
-        # Probar con separador ; y fallback a ,
+        # Intento inteligente con separador
         try:
             df = pd.read_csv(archivo, encoding="utf-8", sep=";")
         except:
@@ -68,18 +68,18 @@ if archivo:
             st.stop()
 
         df["email"] = df["email"].fillna("").astype(str).str.strip().str.lower()
-        df["nombre_original"] = df["nombre"] if "nombre" in df.columns else ""
-        df["nombre_original"] = df["nombre_original"].fillna("").astype(str).str.strip().str.lower()
+        df["nombre"] = df["nombre"] if "nombre" in df.columns else ""
+        df["nombre"] = df["nombre"].fillna("").astype(str).str.strip().str.lower()
 
-        # Detección de nombre
+        # Extraer solo si el nombre está vacío
         df["nombre_detectado"] = df.apply(
-            lambda row: row["nombre_original"] if row["nombre_original"] != "" else extraer_nombre_desde_email(row["email"], nombres_validos),
+            lambda row: row["nombre"] if row["nombre"] != "" else extraer_nombre_desde_email(row["email"], nombres_validos),
             axis=1
         )
 
         # Fuente del nombre
         df["fuente_nombre"] = df.apply(
-            lambda row: "columna nombre" if row["nombre_original"] != "" else (
+            lambda row: "columna nombre" if row["nombre"] != "" else (
                 "correo electrónico" if row["nombre_detectado"] != "Nombre no detectado" else "no disponible"
             ),
             axis=1
@@ -89,7 +89,7 @@ if archivo:
         df_final = df.merge(diccionario, how="left", left_on="nombre_detectado", right_on="forename")
         df_final["gender"] = df_final["gender"].fillna("No identificado")
 
-        # Mostrar resultado
+        # Mostrar resultados
         st.success("✅ Resultado del análisis")
         st.dataframe(df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]])
 
