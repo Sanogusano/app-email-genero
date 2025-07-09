@@ -4,13 +4,12 @@ import re
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# Configuración de la app
+# Configuración general
 st.set_page_config(page_title="Clasificador de Género por Nombre", layout="centered", page_icon="👤")
-
-# Cargar logo y encabezado
 logo = Image.open("logo.jpg")
 st.image(logo, width=250)
 st.title("👤 Clasificador de Género por Nombre")
+
 st.markdown("""
 Sube un archivo .CSV con las columnas **email** y opcionalmente **nombre**.  
 La app detectará el género a partir del nombre, o intentará extraerlo del correo si no está disponible.
@@ -24,7 +23,22 @@ La app detectará el género a partir del nombre, o intentará extraerlo del cor
 🔗 [linkedin.com/in/andresrestrepoh](https://www.linkedin.com/in/andresrestrepoh)
 """)
 
-# Cargar diccionario desde CSV local
+# Descarga de plantilla CSV
+st.markdown("### 🧾 Plantilla CSV de ejemplo")
+plantilla_df = pd.DataFrame({
+    "email": ["ejemplo1@gmail.com", "ejemplo2@hotmail.com"],
+    "nombre": ["ana", ""]
+})
+plantilla_csv = plantilla_df.to_csv(index=False)
+st.download_button("📥 Descargar plantilla CSV", plantilla_csv, file_name="plantilla_genero.csv", mime="text/csv")
+
+st.markdown("""
+**Instrucciones:**
+- La columna `email` es obligatoria.
+- Si no tienes `nombre`, déjalo vacío. El sistema lo buscará en el correo.
+""")
+
+# Cargar diccionario
 @st.cache_data
 def cargar_diccionario():
     df = pd.read_csv("latam_forenames.csv")
@@ -34,50 +48,31 @@ def cargar_diccionario():
     return df[["forename", "gender"]]
 
 diccionario = cargar_diccionario()
-nombres_validos = set(diccionario["forename"].tolist())
+nombres_validos = diccionario["forename"].tolist()
 
-# Función optimizada para detectar nombre dentro del correo
-def extraer_nombre_desde_email(email):
-    if not isinstance(email, str) or "@" not in email:
+# Mejor extracción desde el email
+def extraer_nombre_desde_email(email, nombres_validos):
+    if pd.isna(email):
+        return "Nombre no detectado"
+    try:
+        email_user = str(email).split("@")[0].lower()
+        email_user = re.sub(r"\d+", "", email_user)  # eliminar números
+        posibles = re.split(r"[\W_]+", email_user)
+
+        for frag in posibles:
+            frag = frag.strip()
+            if frag in nombres_validos:
+                return frag
+
+        for nombre in nombres_validos:
+            if nombre in email_user:
+                return nombre
+
+        return "Nombre no detectado"
+    except Exception:
         return "Nombre no detectado"
 
-    email_user = email.split("@")[0].lower()
-
-    # Reemplazar puntos, guiones y otros por espacios
-    email_user = re.sub(r"[\W\d_]+", " ", email_user)
-    palabras = [p.strip() for p in email_user.split() if p.strip()]
-
-    # Prioridad 1: palabra exacta en el diccionario
-    for palabra in palabras:
-        if palabra in nombres_validos:
-            return palabra
-
-    # Prioridad 2: si contiene algún nombre dentro
-    for nombre in nombres_validos:
-        if nombre in email_user:
-            return nombre
-
-    return "Nombre no detectado"
-
-# Descarga de plantilla CSV
-st.markdown("### 🧾 Plantilla CSV de ejemplo")
-st.markdown("Puedes descargar una plantilla para adaptar tu base de datos:")
-plantilla_df = pd.DataFrame({
-    "email": ["ejemplo1@gmail.com", "ejemplo2@hotmail.com"],
-    "nombre": ["ana", ""]  # segunda fila sin nombre para demostrar que puede ir vacío
-})
-plantilla_csv = plantilla_df.to_csv(index=False)
-st.download_button("📥 Descargar plantilla CSV", plantilla_csv, file_name="plantilla_genero.csv", mime="text/csv")
-
-# Instrucciones antes del uploader
-st.markdown("""
-**Instrucciones importantes:**
-- El archivo debe tener una columna llamada `email`.
-- La columna `nombre` es opcional. Si no tienes el nombre, **déjalo en blanco** y el sistema lo detectará desde el correo electrónico.
-""")
-
-
-# Subida de archivo
+# Subida del archivo
 archivo = st.file_uploader("📂 Sube tu archivo CSV", type=["csv"])
 
 if archivo:
@@ -89,20 +84,14 @@ if archivo:
             st.error("❌ El archivo debe tener una columna llamada 'email'")
             st.stop()
 
-        # Limpieza y homogenización
-        df["email"] = df["email"].astype(str).str.strip().str.lower()
-        if "nombre" in df.columns:
-            df["nombre_original"] = df["nombre"].fillna("").astype(str).str.strip().str.lower()
-        else:
-            df["nombre_original"] = ""
+        df["nombre_original"] = df["nombre"] if "nombre" in df.columns else ""
+        df["nombre_original"] = df["nombre_original"].fillna("").astype(str).str.strip().str.lower()
 
-        # Nombre detectado solo si campo nombre está vacío
         df["nombre_detectado"] = df.apply(
-            lambda row: row["nombre_original"] if row["nombre_original"] != "" else extraer_nombre_desde_email(row["email"]),
+            lambda row: row["nombre_original"] if row["nombre_original"] != "" else extraer_nombre_desde_email(row["email"], nombres_validos),
             axis=1
         )
 
-        # Fuente del nombre
         df["fuente_nombre"] = df.apply(
             lambda row: "columna nombre" if row["nombre_original"] != "" else (
                 "correo electrónico" if row["nombre_detectado"] != "Nombre no detectado" else "no disponible"
@@ -110,16 +99,16 @@ if archivo:
             axis=1
         )
 
-        # Cruce con diccionario
         df_final = df.merge(diccionario, how="left", left_on="nombre_detectado", right_on="forename")
         df_final["gender"] = df_final["gender"].fillna("No identificado")
 
-        # Resultados
+        df_salida = df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]].drop_duplicates()
+
         st.success("✅ Resultado del análisis")
-        st.dataframe(df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]])
+        st.dataframe(df_salida)
 
         # Gráfico resumen
-        genero_counts = df_final["gender"].value_counts()
+        genero_counts = df_salida["gender"].value_counts()
         fig, ax = plt.subplots()
         genero_counts.plot(kind='bar', ax=ax, color='mediumslateblue')
         ax.set_title("Distribución de Géneros Detectados")
@@ -127,8 +116,8 @@ if archivo:
         ax.set_ylabel("Cantidad")
         st.pyplot(fig)
 
-        # Descarga
-        csv_export = df_final[["email", "nombre_detectado", "fuente_nombre", "gender"]].to_csv(index=False)
+        # Botón de descarga
+        csv_export = df_salida.to_csv(index=False)
         st.download_button("📥 Descargar resultados", csv_export, file_name="genero_detectado.csv", mime="text/csv")
 
     except Exception as e:
