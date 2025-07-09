@@ -30,12 +30,12 @@ La app detectará el género a partir del nombre, o intentará extraerlo del cor
 def cargar_diccionario():
     df = pd.read_csv("latam_forenames.csv")
     df = df.drop_duplicates(subset="forename")
-    df["forename"] = df["forename"].str.lower().str.strip()
-    df["gender"] = df["gender"].str.strip()
+    df["forename"] = df["forename"].astype(str).str.lower().str.strip()
+    df["gender"] = df["gender"].astype(str).str.strip()
     return df[["forename", "gender"]]
 
 diccionario = cargar_diccionario()
-nombres_validos = diccionario["forename"].tolist()
+nombres_validos = [str(n).strip().lower() for n in diccionario["forename"].tolist()]
 
 # Función para detectar nombre dentro del correo
 def extraer_nombre_desde_email(email, nombres_validos):
@@ -43,10 +43,9 @@ def extraer_nombre_desde_email(email, nombres_validos):
         return "Nombre no detectado"
     email_user = email.split("@")[0].lower()
     for nombre in nombres_validos:
-        if nombre in email_user:
+        if isinstance(nombre, str) and nombre in email_user:
             return nombre
     return "Nombre no detectado"
-
 
 # Subida de archivo
 archivo = st.file_uploader("📂 Sube tu archivo CSV", type=["csv"])
