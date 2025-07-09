@@ -59,6 +59,24 @@ def extraer_nombre_desde_email(email):
 
     return "Nombre no detectado"
 
+# Descarga de plantilla CSV
+st.markdown("### 🧾 Plantilla CSV de ejemplo")
+st.markdown("Puedes descargar una plantilla para adaptar tu base de datos:")
+plantilla_df = pd.DataFrame({
+    "email": ["ejemplo1@gmail.com", "ejemplo2@hotmail.com"],
+    "nombre": ["ana", ""]  # segunda fila sin nombre para demostrar que puede ir vacío
+})
+plantilla_csv = plantilla_df.to_csv(index=False)
+st.download_button("📥 Descargar plantilla CSV", plantilla_csv, file_name="plantilla_genero.csv", mime="text/csv")
+
+# Instrucciones antes del uploader
+st.markdown("""
+**Instrucciones importantes:**
+- El archivo debe tener una columna llamada `email`.
+- La columna `nombre` es opcional. Si no tienes el nombre, **déjalo en blanco** y el sistema lo detectará desde el correo electrónico.
+""")
+
+
 # Subida de archivo
 archivo = st.file_uploader("📂 Sube tu archivo CSV", type=["csv"])
 
